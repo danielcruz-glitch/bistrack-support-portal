@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900;
+}
+
+input,
+select,
+textarea {
+  @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+}
+
+label {
+  @apply mb-1 block text-sm font-medium text-slate-700;
+}
+
+button {
+  @apply transition;
+}
+
+.card {
+  @apply rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200;
+}
+
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+}
+
+.table-wrap {
+  @apply overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200;
+}
+
+.table-wrap table {
+  @apply min-w-full text-sm;
+}
+
+.table-wrap th {
+  @apply bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600;
+}
+
+.table-wrap td {
+  @apply border-t border-slate-200 px-4 py-3 align-top;
+}
