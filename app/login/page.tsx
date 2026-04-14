@@ -1,36 +1,92 @@
-import Link from 'next/link';
-import { AuthCard } from '@/components/AuthCard';
-import { loginAction } from '@/app/actions';
+"use client";
 
-export default async function LoginPage({
-  searchParams
-}: {
-  searchParams: Promise<{ error?: string; message?: string }>;
-}) {
-  const params = await searchParams;
+import { APP_NAME } from "@/lib/constants";
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleLogin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setMessage("Login successful.");
+    router.push("/dashboard");
+    router.refresh();
+  }
 
   return (
-    <div className="px-4">
-      <AuthCard title="Log in" subtitle="Access the support portal and view ticket history.">
-        {params.error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{params.error}</div>}
-        {params.message && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{params.message}</div>}
-        <form action={loginAction} className="space-y-4">
+    <main className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow">
+        <h1 className="text-2xl font-bold mb-2">{APP_NAME} Login</h1>
+        <p className="text-sm text-gray-600 mb-6">
+          Sign in to access the support portal.
+        </p>
+
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" required />
+            <label className="block text-sm font-medium mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full rounded-lg border px-3 py-2"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
+
           <div>
-            <label htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" required />
+            <label className="block text-sm font-medium mb-1">Password</label>
+            <input
+              type="password"
+              className="w-full rounded-lg border px-3 py-2"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </div>
-          <button className="w-full rounded-xl bg-brand px-4 py-2.5 font-semibold text-white hover:bg-brand-dark">
-            Log in
+
+          {message && (
+            <p className="text-sm text-red-600">{message}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-black text-white py-2 disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Login"}
           </button>
         </form>
-        <p className="mt-4 text-sm text-slate-600">
-          Need an account? <Link href="/signup" className="font-semibold text-brand">Create one</Link>
+
+        <p className="mt-4 text-sm text-gray-600">
+          Need an account?{" "}
+          <Link href="/signup" className="underline">
+            Sign up
+          </Link>
         </p>
-      </AuthCard>
-    </div>
+      </div>
+    </main>
   );
 }
