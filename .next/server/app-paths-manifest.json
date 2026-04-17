@@ -1,4 +1,8 @@
 {
   "/admin/invoices/page": "app/admin/invoices/page.js",
-  "/admin/invoices/[id]/page": "app/admin/invoices/[id]/page.js"
+  "/admin/users/page": "app/admin/users/page.js",
+  "/admin/invoices/[id]/page": "app/admin/invoices/[id]/page.js",
+  "/dashboard/tickets/page": "app/dashboard/tickets/page.js",
+  "/admin/companies/page": "app/admin/companies/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }
