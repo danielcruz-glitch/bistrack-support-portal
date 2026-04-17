@@ -27,7 +27,7 @@ export default async function DashboardPage() {
         <div className="rounded-2xl bg-white p-8 shadow">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2">{APP_NAME}</h1>
+              <h1 className="mb-2 text-3xl font-bold">{APP_NAME}</h1>
               <p className="text-gray-600">
                 Welcome to the ERP Support portal.
               </p>
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
             href="/dashboard/tickets/new"
             className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
           >
-            <h2 className="text-xl font-semibold mb-2">Submit a Ticket</h2>
+            <h2 className="mb-2 text-xl font-semibold">Submit a Ticket</h2>
             <p className="text-gray-600">
               Log a new issue for support to review.
             </p>
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
             href="/dashboard/tickets"
             className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
           >
-            <h2 className="text-xl font-semibold mb-2">My Tickets</h2>
+            <h2 className="mb-2 text-xl font-semibold">My Tickets</h2>
             <p className="text-gray-600">
               View the tickets you have submitted.
             </p>
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
               href="/dashboard/support"
               className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
             >
-              <h2 className="text-xl font-semibold mb-2">Support Queue</h2>
+              <h2 className="mb-2 text-xl font-semibold">Support Queue</h2>
               <p className="text-gray-600">
                 Review, assign, and manage all tickets.
               </p>
@@ -96,12 +96,12 @@ export default async function DashboardPage() {
 
           {profile?.role === "admin" && (
             <Link
-              href="/dashboard/admin/users"
+              href="/admin/users"
               className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
             >
-              <h2 className="text-xl font-semibold mb-2">User Management</h2>
+              <h2 className="mb-2 text-xl font-semibold">User Management</h2>
               <p className="text-gray-600">
-                Create users and assign roles.
+                View users, create users, assign companies, and manage roles.
               </p>
             </Link>
           )}

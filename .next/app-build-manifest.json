@@ -1,25 +1,35 @@
 {
   "pages": {
+    "/api/invoices/[id]/pdf/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/invoices/[id]/pdf/route.js"
+    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/admin/users/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/users/page.js"
+      "static/chunks/app/page.js"
     ],
-    "/admin/users/[id]/edit/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/users/[id]/edit/page.js"
+      "static/chunks/app/dashboard/page.js"
     ],
-    "/api/admin/users/[id]/update/route": [
+    "/admin/invoices/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/admin/users/[id]/update/route.js"
+      "static/chunks/app/admin/invoices/page.js"
+    ],
+    "/admin/invoices/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/invoices/[id]/page.js"
     ]
   }
 }

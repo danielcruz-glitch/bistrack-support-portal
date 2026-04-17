@@ -5,17 +5,69 @@ import { createClient } from "@/lib/supabase/server";
 
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    updated?: string;
+  }>;
 };
 
-export default async function TicketDetailPage({ params }: Props) {
+function getRoleBadgeClass(role: string | null) {
+  switch (role) {
+    case "admin":
+      return "bg-purple-100 text-purple-700 border-purple-200";
+    case "support":
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    default:
+      return "bg-gray-100 text-gray-700 border-gray-200";
+  }
+}
+
+function formatErrorMessage(error?: string) {
+  if (!error) return null;
+
+  switch (error) {
+    case "forbidden":
+      return "You do not have permission to perform that action.";
+    case "missing-assignee":
+      return "Please select an assignee.";
+    case "invalid-assignee":
+      return "The selected assignee is invalid or inactive.";
+    case "ticket-not-found":
+      return "Ticket not found.";
+    default:
+      return decodeURIComponent(error);
+  }
+}
+
+export default async function TicketDetailPage({
+  params,
+  searchParams,
+}: Props) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, company_id, is_active")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    redirect("/dashboard?error=profile-not-found");
+  }
+
+  if (!profile.is_active) {
+    redirect("/dashboard?error=inactive-user");
+  }
 
   const { data: ticket, error } = await supabase
     .from("tickets")
@@ -33,10 +85,185 @@ export default async function TicketDetailPage({ params }: Props) {
     );
   }
 
+  const isStaff = profile.role === "staff";
+  const isOwner = profile.role === "owner";
+  const isSupport = profile.role === "support";
+  const isAdmin = profile.role === "admin";
+
+  const isOwnTicket =
+    ticket.submitted_by_user_id === user.id ||
+    ticket.user_id === user.id ||
+    ticket.submitted_by_email === profile.email;
+
+  const isCompanyTicket =
+    !!profile.company_id &&
+    !!ticket.company_id &&
+    profile.company_id === ticket.company_id;
+
+  const canViewTicket =
+    isAdmin ||
+    isSupport ||
+    (isOwner && isCompanyTicket) ||
+    (isStaff && isOwnTicket);
+
+  if (!canViewTicket) {
+    redirect("/dashboard?error=forbidden");
+  }
+
+  const canResolveTicket =
+    isAdmin ||
+    isSupport ||
+    (isOwner && isCompanyTicket) ||
+    (isStaff && isOwnTicket);
+
+  const canAssignTicket = isAdmin || isSupport;
+
+  const { data: company } = ticket.company_id
+    ? await supabase
+        .from("companies")
+        .select("name")
+        .eq("id", ticket.company_id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: assigneeProfile } = ticket.assigned_to_user_id
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email, role")
+        .eq("id", ticket.assigned_to_user_id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: assignableUsers } = canAssignTicket
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, is_active")
+        .in("role", ["support", "admin"])
+        .eq("is_active", true)
+        .order("full_name", { ascending: true })
+    : { data: null };
+
+  async function updateAssignee(formData: FormData) {
+    "use server";
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role, company_id, is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile || !profile.is_active) {
+      redirect("/dashboard?error=forbidden");
+    }
+
+    const canAssignTicket = profile.role === "admin" || profile.role === "support";
+
+    if (!canAssignTicket) {
+      redirect(`/dashboard/tickets/${id}?error=forbidden`);
+    }
+
+    const assignedToUserId = String(formData.get("assigned_to_user_id") || "").trim();
+
+    if (!assignedToUserId) {
+      redirect(`/dashboard/tickets/${id}?error=missing-assignee`);
+    }
+
+    const { data: selectedAssignee, error: assigneeError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role, is_active")
+      .eq("id", assignedToUserId)
+      .in("role", ["support", "admin"])
+      .eq("is_active", true)
+      .single();
+
+    if (assigneeError || !selectedAssignee) {
+      redirect(`/dashboard/tickets/${id}?error=invalid-assignee`);
+    }
+
+    const { error: updateError } = await supabase
+      .from("tickets")
+      .update({
+        assigned_to_user_id: selectedAssignee.id,
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      const encoded = encodeURIComponent(updateError.message);
+      redirect(`/dashboard/tickets/${id}?error=${encoded}`);
+    }
+
+    revalidatePath("/dashboard/tickets");
+    revalidatePath(`/dashboard/tickets/${id}`);
+    redirect(`/dashboard/tickets/${id}?updated=assignee`);
+  }
+
   async function markResolved(formData: FormData) {
     "use server";
 
     const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role, company_id, is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile || !profile.is_active) {
+      redirect("/dashboard?error=forbidden");
+    }
+
+    const { data: currentTicket, error: ticketError } = await supabase
+      .from("tickets")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (ticketError || !currentTicket) {
+      redirect("/dashboard/tickets?error=ticket-not-found");
+    }
+
+    const isStaff = profile.role === "staff";
+    const isOwner = profile.role === "owner";
+    const isSupport = profile.role === "support";
+    const isAdmin = profile.role === "admin";
+
+    const isOwnTicket =
+      currentTicket.submitted_by_user_id === user.id ||
+      currentTicket.user_id === user.id ||
+      currentTicket.submitted_by_email === profile.email;
+
+    const isCompanyTicket =
+      !!profile.company_id &&
+      !!currentTicket.company_id &&
+      profile.company_id === currentTicket.company_id;
+
+    const canResolveTicket =
+      isAdmin ||
+      isSupport ||
+      (isOwner && isCompanyTicket) ||
+      (isStaff && isOwnTicket);
+
+    if (!canResolveTicket) {
+      redirect(`/dashboard/tickets/${id}?error=forbidden`);
+    }
 
     const resolutionNotes = String(formData.get("resolution_notes") || "").trim();
 
@@ -60,6 +287,12 @@ export default async function TicketDetailPage({ params }: Props) {
     redirect("/dashboard/tickets");
   }
 
+  const errorMessage = formatErrorMessage(resolvedSearchParams.error);
+  const updatedMessage =
+    resolvedSearchParams.updated === "assignee"
+      ? "Ticket assignee updated successfully."
+      : null;
+
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -69,41 +302,141 @@ export default async function TicketDetailPage({ params }: Props) {
             href="/dashboard/tickets"
             className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50"
           >
-            Back to My Tickets
+            Back to Tickets
           </Link>
         </div>
+
+        {updatedMessage && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {updatedMessage}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="rounded-2xl bg-white p-6 shadow">
           <p className="mb-4 text-gray-700">{ticket.issue_description}</p>
 
           <div className="grid gap-2 text-sm">
-            <p><strong>Status:</strong> {ticket.status}</p>
-            <p><strong>Category:</strong> {ticket.issue_category}</p>
-            <p><strong>Importance:</strong> {ticket.importance}</p>
-            <p><strong>Urgency:</strong> {ticket.urgency}</p>
-            <p><strong>Created:</strong> {new Date(ticket.created_at).toLocaleString()}</p>
-            <p><strong>Resolved:</strong> {ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleString() : "-"}</p>
+            <p>
+              <strong>Status:</strong> {ticket.status}
+            </p>
+            <p>
+              <strong>Company:</strong> {company?.name || "Unassigned"}
+            </p>
+            <p>
+              <strong>Category:</strong> {ticket.issue_category}
+            </p>
+            <p>
+              <strong>Importance:</strong> {ticket.importance}
+            </p>
+            <p>
+              <strong>Urgency:</strong> {ticket.urgency}
+            </p>
+            <p>
+              <strong>Submitted By:</strong> {ticket.submitted_by_name || "-"}
+            </p>
+            <p>
+              <strong>Email:</strong> {ticket.submitted_by_email || "-"}
+            </p>
+            <p>
+              <strong>Department:</strong> {ticket.department || "-"}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <strong>Assigned To:</strong>
+              {assigneeProfile ? (
+                <>
+                  <span>
+                    {assigneeProfile.full_name || "Unknown"} ({assigneeProfile.email || "no email"})
+                  </span>
+                  <span
+                    className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium capitalize ${getRoleBadgeClass(
+                      assigneeProfile.role
+                    )}`}
+                  >
+                    {assigneeProfile.role || "unknown"}
+                  </span>
+                </>
+              ) : (
+                <span>Unassigned</span>
+              )}
+            </div>
+            <p>
+              <strong>Created:</strong>{" "}
+              {ticket.created_at ? new Date(ticket.created_at).toLocaleString() : "-"}
+            </p>
+            <p>
+              <strong>Resolved:</strong>{" "}
+              {ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleString() : "-"}
+            </p>
           </div>
         </div>
 
-        {ticket.status !== "resolved" && ticket.status !== "closed" && (
+        {canAssignTicket && (
           <div className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="mb-3 text-lg font-semibold">Mark as Resolved</h2>
+            <h2 className="mb-2 text-lg font-semibold">Assign Ticket</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Assign this ticket to an active ERP Nexus support or admin user.
+            </p>
 
-            <form action={markResolved} className="space-y-4">
-              <textarea
-                name="resolution_notes"
-                rows={4}
+            <form action={updateAssignee} className="space-y-4">
+              <select
+                name="assigned_to_user_id"
+                defaultValue={ticket.assigned_to_user_id || ""}
                 className="w-full rounded-lg border px-3 py-2"
-                placeholder="Optional: describe what fixed the issue"
-              />
+                required
+              >
+                <option value="" disabled>
+                  Select support/admin assignee
+                </option>
+                {(assignableUsers ?? []).map((internalUser) => (
+                  <option key={internalUser.id} value={internalUser.id}>
+                    {(internalUser.full_name || internalUser.email) +
+                      ` - ${internalUser.email || "no email"} (${internalUser.role})`}
+                  </option>
+                ))}
+              </select>
 
-              <button className="rounded-lg bg-green-600 px-4 py-2 text-white">
-                Mark Resolved
+              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:opacity-90">
+                Update Assignee
               </button>
             </form>
           </div>
         )}
+
+        {ticket.resolution_notes && (
+          <div className="rounded-2xl bg-white p-6 shadow">
+            <h2 className="mb-3 text-lg font-semibold">Resolution Notes</h2>
+            <p className="whitespace-pre-wrap text-gray-700">
+              {ticket.resolution_notes}
+            </p>
+          </div>
+        )}
+
+        {canResolveTicket &&
+          ticket.status !== "resolved" &&
+          ticket.status !== "closed" && (
+            <div className="rounded-2xl bg-white p-6 shadow">
+              <h2 className="mb-3 text-lg font-semibold">Mark as Resolved</h2>
+
+              <form action={markResolved} className="space-y-4">
+                <textarea
+                  name="resolution_notes"
+                  rows={4}
+                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="Optional: describe what fixed the issue"
+                />
+
+                <button className="rounded-lg bg-green-600 px-4 py-2 text-white hover:opacity-90">
+                  Mark Resolved
+                </button>
+              </form>
+            </div>
+          )}
       </div>
     </main>
   );

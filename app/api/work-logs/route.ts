@@ -23,6 +23,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const hoursWorked = Number(hours);
+    const hourlyRate = Number(rate);
+
+    if (Number.isNaN(hoursWorked) || hoursWorked <= 0) {
+      return NextResponse.json(
+        { error: "Hours must be a valid number greater than 0." },
+        { status: 400 }
+      );
+    }
+
+    if (Number.isNaN(hourlyRate) || hourlyRate < 0) {
+      return NextResponse.json(
+        { error: "Rate must be a valid number." },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("work_logs")
       .insert({
@@ -30,8 +47,8 @@ export async function POST(req: Request) {
         user_id: user_id || null,
         support_staff_id: support_staff_id || null,
         work_date,
-        hours: Number(hours),
-        rate: Number(rate),
+        hours_worked: hoursWorked,
+        rate: hourlyRate,
         description,
         billed: false,
       })

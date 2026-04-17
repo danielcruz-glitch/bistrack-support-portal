@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type UserRow = {
@@ -12,11 +13,31 @@ type UserRow = {
   hourly_rate: number | null;
   is_active: boolean;
   created_at: string;
+  company_id?: string | null;
+  companies?:
+    | {
+        id: string;
+        name: string;
+      }
+    | null;
 };
 
 export default function UsersTable({ users }: { users: UserRow[] }) {
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const aCompany = a.companies?.name ?? "Unassigned";
+      const bCompany = b.companies?.name ?? "Unassigned";
+
+      if (aCompany !== bCompany) {
+        return aCompany.localeCompare(bCompany);
+      }
+
+      return (a.full_name ?? "").localeCompare(b.full_name ?? "");
+    });
+  }, [users]);
 
   async function deactivateUser(id: string) {
     const confirmed = window.confirm("Deactivate this user?");
@@ -70,6 +91,33 @@ export default function UsersTable({ users }: { users: UserRow[] }) {
     }
   }
 
+  function getRoleBadgeClasses(role: string | null) {
+    switch (role) {
+      case "admin":
+        return "bg-purple-100 text-purple-700";
+      case "support":
+        return "bg-blue-100 text-blue-700";
+      case "owner":
+        return "bg-green-100 text-green-700";
+      case "staff":
+        return "bg-gray-100 text-gray-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  }
+
+  function getCompanyBadgeClasses(companyName: string) {
+    if (companyName.trim().toLowerCase() === "erp nexus") {
+      return "bg-purple-100 text-purple-700";
+    }
+
+    if (companyName === "Unassigned") {
+      return "bg-red-100 text-red-700";
+    }
+
+    return "bg-gray-100 text-gray-700";
+  }
+
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="min-w-full text-sm">
@@ -78,6 +126,7 @@ export default function UsersTable({ users }: { users: UserRow[] }) {
             <th className="p-3 text-left">Name</th>
             <th className="p-3 text-left">Email</th>
             <th className="p-3 text-left">Department</th>
+            <th className="p-3 text-left">Company</th>
             <th className="p-3 text-left">Role</th>
             <th className="p-3 text-left">Hourly Rate</th>
             <th className="p-3 text-left">Status</th>
@@ -86,62 +135,84 @@ export default function UsersTable({ users }: { users: UserRow[] }) {
         </thead>
 
         <tbody>
-          {users.map((user) => (
-            <tr key={user.id} className="border-t">
-              <td className="p-3">{user.full_name ?? "-"}</td>
-              <td className="p-3">{user.email ?? "-"}</td>
-              <td className="p-3">{user.department ?? "-"}</td>
-              <td className="p-3">{user.role ?? "-"}</td>
-              <td className="p-3">
-                {user.role === "admin" || user.role === "support"
-                  ? user.hourly_rate != null
-                    ? `$${Number(user.hourly_rate).toFixed(2)}`
-                    : "-"
-                  : "N/A"}
-              </td>
-              <td className="p-3">
-                <span
-                  className={`rounded px-2 py-1 text-xs font-medium ${
-                    user.is_active
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {user.is_active ? "Active" : "Inactive"}
-                </span>
-              </td>
-              <td className="p-3">
-                <div className="flex gap-2">
-  <a
-    href={`/admin/users/${user.id}/edit`}
-    className="rounded bg-blue-600 px-3 py-1 text-white"
-  >
-    Edit
-  </a>
+          {sortedUsers.map((user) => {
+            const isBusy = loadingId === user.id;
+            const companyName = user.companies?.name ?? "Unassigned";
 
-  <button
-    onClick={() => deactivateUser(user.id)}
-    disabled={loadingId === user.id || !user.is_active}
-    className="rounded bg-yellow-600 px-3 py-1 text-white disabled:opacity-50"
-  >
-    {loadingId === user.id ? "Working..." : "Deactivate"}
-  </button>
+            return (
+              <tr key={user.id} className="border-t align-top">
+                <td className="p-3">{user.full_name ?? "-"}</td>
+                <td className="p-3">{user.email ?? "-"}</td>
+                <td className="p-3">{user.department ?? "-"}</td>
+                <td className="p-3">
+                  <span
+                    className={`rounded px-2 py-1 text-xs font-medium ${getCompanyBadgeClasses(
+                      companyName
+                    )}`}
+                  >
+                    {companyName}
+                  </span>
+                </td>
+                <td className="p-3">
+                  <span
+                    className={`rounded px-2 py-1 text-xs font-medium capitalize ${getRoleBadgeClasses(
+                      user.role
+                    )}`}
+                  >
+                    {user.role ?? "-"}
+                  </span>
+                </td>
+                <td className="p-3">
+                  {user.role === "admin" || user.role === "support"
+                    ? user.hourly_rate != null
+                      ? `$${Number(user.hourly_rate).toFixed(2)}`
+                      : "-"
+                    : "N/A"}
+                </td>
+                <td className="p-3">
+                  <span
+                    className={`rounded px-2 py-1 text-xs font-medium ${
+                      user.is_active
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {user.is_active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="p-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/admin/users/${user.id}/edit`}
+                      className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700"
+                    >
+                      Edit
+                    </Link>
 
-  <button
-    onClick={() => deleteUser(user.id)}
-    disabled={loadingId === user.id}
-    className="rounded bg-red-600 px-3 py-1 text-white disabled:opacity-50"
-  >
-    {loadingId === user.id ? "Working..." : "Delete"}
-  </button>
-</div>
-              </td>
-            </tr>
-          ))}
+                    <button
+                      onClick={() => deactivateUser(user.id)}
+                      disabled={isBusy || !user.is_active}
+                      className="rounded bg-yellow-600 px-3 py-1 text-white hover:bg-yellow-700 disabled:opacity-50"
+                    >
+                      {isBusy ? "Working..." : "Deactivate"}
+                    </button>
 
-          {users.length === 0 && (
+                    <button
+                      onClick={() => deleteUser(user.id)}
+                      disabled={isBusy}
+                      className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isBusy ? "Working..." : "Delete"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+
+          {sortedUsers.length === 0 && (
             <tr>
-              <td colSpan={7} className="p-6 text-center text-gray-500">
+              <td colSpan={8} className="p-6 text-center text-gray-500">
                 No users found.
               </td>
             </tr>
