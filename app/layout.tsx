@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { APP_NAME } from "@/lib/constants";
 import NavBar from "@/components/NavBar";
+import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: APP_NAME,
@@ -10,15 +10,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
-      <body>
-  <NavBar />
-  {children}
-</body>
+      <body className="page-shell">
+        <NavBar />
+        <main className="page-content">{children}</main>
+      </body>
     </html>
   );
 }

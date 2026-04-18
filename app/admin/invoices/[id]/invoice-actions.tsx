@@ -1,18 +1,40 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+type InvoiceActionsProps = {
+  invoiceId: string;
+  status: string;
+};
+
+function getStatusBadgeClass(status: string) {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("paid")) {
+    return "status-badge status-success";
+  }
+
+  if (normalized.includes("draft")) {
+    return "status-badge status-warning";
+  }
+
+  if (normalized.includes("overdue") || normalized.includes("void")) {
+    return "status-badge status-danger";
+  }
+
+  return "status-badge status-open";
+}
 
 export default function InvoiceActions({
   invoiceId,
   status,
-}: {
-  invoiceId: string;
-  status: string;
-}) {
+}: InvoiceActionsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [emailing, setEmailing] = useState(false);
+
+  const normalizedStatus = useMemo(() => (status || "unknown").toLowerCase(), [status]);
 
   async function updateStatus(newStatus: string) {
     try {
@@ -62,47 +84,55 @@ export default function InvoiceActions({
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-3">
-      <a
-        href={`/api/invoices/${invoiceId}/pdf`}
-        target="_blank"
-        rel="noreferrer"
-        className="rounded bg-black px-3 py-1 text-white"
-      >
-        Download PDF
-      </a>
-
-      <button
-        onClick={emailInvoice}
-        disabled={emailing}
-        className="rounded bg-purple-600 px-3 py-1 text-white disabled:opacity-50"
-      >
-        {emailing ? "Sending..." : "Email Invoice"}
-      </button>
-
-      {status === "draft" && (
-        <button
-          onClick={() => updateStatus("sent")}
-          disabled={loading}
-          className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href={`/api/invoices/${invoiceId}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="button-secondary"
         >
-          Mark as Sent
-        </button>
-      )}
+          Download PDF
+        </a>
 
-      {status === "sent" && (
         <button
-          onClick={() => updateStatus("paid")}
-          disabled={loading}
-          className="rounded bg-green-600 px-3 py-1 text-white disabled:opacity-50"
+          onClick={emailInvoice}
+          disabled={emailing}
+          className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Mark as Paid
+          {emailing ? "Sending..." : "Email Invoice"}
         </button>
-      )}
 
-      <span className="self-center text-sm text-gray-500">
-        Current status: {status}
-      </span>
+        {normalizedStatus === "draft" && (
+          <button
+            onClick={() => updateStatus("sent")}
+            disabled={loading}
+            className="button-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Updating..." : "Mark as Sent"}
+          </button>
+        )}
+
+        {normalizedStatus === "sent" && (
+          <button
+            onClick={() => updateStatus("paid")}
+            disabled={loading}
+            className="inline-flex items-center justify-center rounded-lg bg-success px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Updating..." : "Mark as Paid"}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-nexus-500">
+          Current Status
+        </span>
+
+        <span className={getStatusBadgeClass(normalizedStatus)}>
+          {status || "Unknown"}
+        </span>
+      </div>
     </div>
   );
 }

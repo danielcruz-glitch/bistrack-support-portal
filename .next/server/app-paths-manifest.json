@@ -1,5 +1,5 @@
 {
-  "/page": "app/page.js",
-  "/admin/users/page": "app/admin/users/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/api/invoices/generate/route": "app/api/invoices/generate/route.js",
+  "/api/invoices/[id]/pdf/route": "app/api/invoices/[id]/pdf/route.js",
+  "/admin/invoices/page": "app/admin/invoices/page.js"
 }

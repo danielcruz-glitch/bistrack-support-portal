@@ -3,47 +3,134 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --panel: #ffffff;
+  --nav: #0f172a;
+  --nav-2: #1e293b;
+  --brand: #3b82f6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-slate-100 text-slate-900;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.06), transparent 28%),
+    linear-gradient(to bottom, #f8fafc, #f8fafc);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-input,
-select,
-textarea {
-  @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+* {
+  border-color: var(--border);
 }
 
-label {
-  @apply mb-1 block text-sm font-medium text-slate-700;
+@layer base {
+  h1 {
+    @apply text-3xl font-semibold tracking-tight text-nexus-900;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold tracking-tight text-nexus-900;
+  }
+
+  h3 {
+    @apply text-lg font-semibold text-nexus-900;
+  }
+
+  p {
+    @apply text-sm text-nexus-600;
+  }
 }
 
-button {
-  @apply transition;
-}
+@layer components {
+  .page-shell {
+    @apply min-h-screen bg-nexus-50 bg-nexus-radial;
+  }
 
-.card {
-  @apply rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200;
-}
+  .page-content {
+    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8;
+  }
 
-.badge {
-  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
-}
+  .panel {
+    @apply rounded-xl border border-nexus-200 bg-white shadow-soft;
+  }
 
-.table-wrap {
-  @apply overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200;
-}
+  .panel-premium {
+    @apply rounded-xl border border-nexus-200 bg-white shadow-panel;
+  }
 
-.table-wrap table {
-  @apply min-w-full text-sm;
-}
+  .section-header {
+    @apply mb-5 flex items-center justify-between gap-4;
+  }
 
-.table-wrap th {
-  @apply bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600;
-}
+  .section-title {
+    @apply text-xl font-semibold tracking-tight text-nexus-900;
+  }
 
-.table-wrap td {
-  @apply border-t border-slate-200 px-4 py-3 align-top;
+  .section-subtitle {
+    @apply text-sm text-nexus-500;
+  }
+
+  .nexus-grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .status-open {
+    @apply bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200;
+  }
+
+  .status-success {
+    @apply bg-green-50 text-green-700 ring-1 ring-inset ring-green-200;
+  }
+
+  .status-warning {
+    @apply bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200;
+  }
+
+  .status-danger {
+    @apply bg-red-50 text-red-700 ring-1 ring-inset ring-red-200;
+  }
+
+  .table-shell {
+    @apply overflow-hidden rounded-xl border border-nexus-200 bg-white shadow-soft;
+  }
+
+  .table-header {
+    @apply bg-nexus-100/70 text-left text-xs font-semibold uppercase tracking-wide text-nexus-600;
+  }
+
+  .table-row {
+    @apply border-t border-nexus-200 transition-colors hover:bg-nexus-50;
+  }
+
+  .input-nexus {
+    @apply w-full rounded-lg border border-nexus-300 bg-white px-3 py-2 text-sm text-nexus-900 shadow-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-blue-200;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-lg border border-nexus-300 bg-white px-4 py-2 text-sm font-medium text-nexus-700 transition hover:bg-nexus-50 focus:outline-none focus:ring-2 focus:ring-blue-100;
+  }
+
+  .button-ghost {
+    @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium text-nexus-600 transition hover:bg-nexus-100 hover:text-nexus-900;
+  }
 }

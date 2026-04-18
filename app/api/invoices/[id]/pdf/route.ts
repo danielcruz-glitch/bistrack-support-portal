@@ -28,6 +28,10 @@ type WorkLogRow = {
   description: string | null;
   hours_worked: number | null;
   ticket_id: string | null;
+  tickets?: {
+    id: string | null;
+    issue_title: string | null;
+  } | null;
 };
 
 async function loadLogoBytes(
@@ -69,6 +73,28 @@ function formatInvoiceDate(value: string | null) {
 
 function safeNumber(value: number | null | undefined) {
   return Number(value || 0);
+}
+
+function makeTicketDisplay(ticketId: string | null) {
+  if (!ticketId) return "";
+  return `TKT-${ticketId.slice(0, 8).toUpperCase()}`;
+}
+
+function makeLineDescription(log: WorkLogRow) {
+  const issueTitle = log.tickets?.issue_title?.trim() || "";
+  const workLogDescription = log.description?.trim() || "";
+
+  if (issueTitle && workLogDescription) {
+    if (issueTitle.toLowerCase() === workLogDescription.toLowerCase()) {
+      return issueTitle;
+    }
+    return `${issueTitle} - ${workLogDescription}`;
+  }
+
+  if (issueTitle) return issueTitle;
+  if (workLogDescription) return workLogDescription;
+
+  return "ERP support services";
 }
 
 export async function GET(
@@ -160,7 +186,11 @@ export async function GET(
       work_date,
       description,
       hours_worked,
-      ticket_id
+      ticket_id,
+      tickets (
+        id,
+        issue_title
+      )
     `)
     .eq("invoice_id", id)
     .order("work_date", { ascending: true });
@@ -191,8 +221,8 @@ export async function GET(
 
           return {
             date: log.work_date ? formatInvoiceDate(log.work_date) : "",
-            ticket_number: log.ticket_id ? `#${log.ticket_id}` : "",
-            description: log.description || "ERP support services",
+            ticket_number: makeTicketDisplay(log.ticket_id),
+            description: makeLineDescription(log),
             hours,
             rate: totalHours > 0 ? derivedRate : null,
             amount,

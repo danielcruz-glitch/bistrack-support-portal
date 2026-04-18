@@ -1,12 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type CompanyOption = {
+  id: string;
+  name: string;
+  billingEmail: string;
+};
+
+type CompaniesResponse = {
+  companies: CompanyOption[];
+};
 
 export default function InvoiceGenerator() {
   const router = useRouter();
 
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+
   const [form, setForm] = useState({
+    company_id: "",
     customer_name: "",
     customer_email: "",
     billing_period_start: "",
@@ -16,6 +30,45 @@ export default function InvoiceGenerator() {
   });
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function loadCompanies() {
+      try {
+        setLoadingCompanies(true);
+
+        const res = await fetch("/api/invoices/generate?lookup=companies");
+        const data: CompaniesResponse = await res.json();
+
+        if (!res.ok) {
+          throw new Error("Failed to load companies.");
+        }
+
+        setCompanies(data.companies ?? []);
+      } catch (error) {
+        console.error(error);
+        alert("Failed to load companies.");
+      } finally {
+        setLoadingCompanies(false);
+      }
+    }
+
+    loadCompanies();
+  }, []);
+
+  const selectedCompany = useMemo(() => {
+    return companies.find((company) => company.id === form.company_id) || null;
+  }, [companies, form.company_id]);
+
+  function handleCompanyChange(companyId: string) {
+    const company = companies.find((item) => item.id === companyId);
+
+    setForm((prev) => ({
+      ...prev,
+      company_id: companyId,
+      customer_name: company?.name || "",
+      customer_email: company?.billingEmail || "",
+    }));
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,6 +82,7 @@ export default function InvoiceGenerator() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          company_id: form.company_id,
           customer_name: form.customer_name,
           customer_email: form.customer_email,
           billing_period_start: form.billing_period_start,
@@ -47,6 +101,7 @@ export default function InvoiceGenerator() {
       alert(`Invoice ${data.invoice.invoice_number} created successfully.`);
 
       setForm({
+        company_id: "",
         customer_name: "",
         customer_email: "",
         billing_period_start: "",
@@ -66,81 +121,145 @@ export default function InvoiceGenerator() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="grid gap-4 rounded-lg border p-4 md:grid-cols-2"
+      className="panel-premium grid gap-4 p-6 md:grid-cols-2"
     >
-      <div>
-        <label className="mb-1 block font-medium">Customer Name</label>
-        <input
-          required
-          className="w-full rounded border p-2"
-          value={form.customer_name}
-          onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
-        />
+      <div className="md:col-span-2">
+        <h2 className="section-title">Create Invoice</h2>
+        <p className="section-subtitle">
+          Select a company, confirm the billing email, and generate an invoice
+          from unbilled work logs in the chosen date range.
+        </p>
       </div>
 
       <div>
-        <label className="mb-1 block font-medium">Customer Email</label>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Company
+        </label>
+        <select
+          required
+          className="input-nexus"
+          value={form.company_id}
+          onChange={(e) => handleCompanyChange(e.target.value)}
+          disabled={loadingCompanies}
+        >
+          <option value="">
+            {loadingCompanies ? "Loading companies..." : "Select a company"}
+          </option>
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Billing Email
+        </label>
         <input
           type="email"
-          className="w-full rounded border p-2"
+          className="input-nexus"
           value={form.customer_email}
-          onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, customer_email: e.target.value }))
+          }
+          placeholder="Auto-filled from company owner"
         />
       </div>
 
       <div>
-        <label className="mb-1 block font-medium">Billing Period Start</label>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Billing Period Start
+        </label>
         <input
           required
           type="date"
-          className="w-full rounded border p-2"
+          className="input-nexus"
           value={form.billing_period_start}
           onChange={(e) =>
-            setForm({ ...form, billing_period_start: e.target.value })
+            setForm((prev) => ({
+              ...prev,
+              billing_period_start: e.target.value,
+            }))
           }
         />
       </div>
 
       <div>
-        <label className="mb-1 block font-medium">Billing Period End</label>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Billing Period End
+        </label>
         <input
           required
           type="date"
-          className="w-full rounded border p-2"
+          className="input-nexus"
           value={form.billing_period_end}
           onChange={(e) =>
-            setForm({ ...form, billing_period_end: e.target.value })
+            setForm((prev) => ({
+              ...prev,
+              billing_period_end: e.target.value,
+            }))
           }
         />
       </div>
 
       <div>
-        <label className="mb-1 block font-medium">Tax Rate %</label>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Tax Rate %
+        </label>
         <input
           type="number"
           step="0.01"
           min="0"
-          className="w-full rounded border p-2"
+          className="input-nexus"
           value={form.tax_rate}
-          onChange={(e) => setForm({ ...form, tax_rate: e.target.value })}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, tax_rate: e.target.value }))
+          }
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Customer Name
+        </label>
+        <input
+          required
+          className="input-nexus"
+          value={form.customer_name}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, customer_name: e.target.value }))
+          }
+          placeholder="Auto-filled from company"
         />
       </div>
 
       <div className="md:col-span-2">
-        <label className="mb-1 block font-medium">Notes</label>
+        <label className="mb-1 block text-sm font-medium text-nexus-700">
+          Notes
+        </label>
         <textarea
           rows={4}
-          className="w-full rounded border p-2"
+          className="input-nexus"
           value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, notes: e.target.value }))
+          }
         />
       </div>
 
-      <div className="md:col-span-2">
+      <div className="md:col-span-2 flex items-center justify-between gap-3">
+        <div className="text-sm text-nexus-500">
+          {selectedCompany
+            ? `Selected company: ${selectedCompany.name}`
+            : "Select a company before generating an invoice."}
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
+          disabled={loading || loadingCompanies}
+          className="button-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Generating..." : "Generate Invoice"}
         </button>

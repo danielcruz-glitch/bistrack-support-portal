@@ -49,7 +49,13 @@ function safeNumber(value: number | null | undefined) {
 }
 
 function formatAddressBlock(lines: Array<string | null | undefined>) {
-  return lines.map((line) => (line || "").trim()).filter(Boolean);
+  return lines
+    .flatMap((line) =>
+      String(line || "")
+        .split("\n")
+        .map((part) => part.trim())
+    )
+    .filter(Boolean);
 }
 
 function buildCustomerAddress(data: InvoicePdfData) {
@@ -58,12 +64,23 @@ function buildCustomerAddress(data: InvoicePdfData) {
     .filter(Boolean)
     .join(", ");
 
-  return formatAddressBlock([
-    data.customerName,
-    data.customerAddressLine1 || data.billTo || "",
-    data.customerAddressLine2 || "",
-    cityStateZip,
-  ]);
+  const hasStructuredCustomerAddress =
+    !!(data.customerAddressLine1 || data.customerAddressLine2 || cityStateZip);
+
+  if (hasStructuredCustomerAddress) {
+    return formatAddressBlock([
+      data.customerName,
+      data.customerAddressLine1 || "",
+      data.customerAddressLine2 || "",
+      cityStateZip,
+    ]);
+  }
+
+  if (data.billTo && data.billTo.trim()) {
+    return formatAddressBlock([data.billTo]);
+  }
+
+  return formatAddressBlock([data.customerName]);
 }
 
 function buildPayToAddress(data: InvoicePdfData) {
@@ -73,8 +90,8 @@ function buildPayToAddress(data: InvoicePdfData) {
     .join(", ");
 
   return formatAddressBlock([
-    data.payToName || "Daniel Cruz",
     data.payToCompanyName || "",
+    data.payToName || "Daniel Cruz",
     data.payToAddressLine1 || "",
     data.payToAddressLine2 || "",
     cityStateZip,
@@ -93,6 +110,66 @@ function drawText(
   page.drawText(text, { x, y, size, font, color });
 }
 
+function drawRightAlignedText(
+  page: any,
+  text: string,
+  rightX: number,
+  y: number,
+  size: number,
+  font: any,
+  color = rgb(0.07, 0.07, 0.07)
+) {
+  const textWidth = font.widthOfTextAtSize(text, size);
+  page.drawText(text, {
+    x: rightX - textWidth,
+    y,
+    size,
+    font,
+    color,
+  });
+}
+
+function wrapTextLines(params: {
+  text: string;
+  maxWidth: number;
+  font: any;
+  size: number;
+}) {
+  const { text, maxWidth, font, size } = params;
+
+  const paragraphs = String(text || "").split("\n");
+  const allLines: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) {
+      allLines.push("");
+      continue;
+    }
+
+    let currentLine = "";
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const width = font.widthOfTextAtSize(testLine, size);
+
+      if (width <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) allLines.push(currentLine);
+        currentLine = word;
+      }
+    }
+
+    if (currentLine) {
+      allLines.push(currentLine);
+    }
+  }
+
+  return allLines.length > 0 ? allLines : [""];
+}
+
 function drawWrappedText(params: {
   page: any;
   text: string;
@@ -106,23 +183,12 @@ function drawWrappedText(params: {
 }) {
   const { page, text, x, y, maxWidth, lineHeight, font, size, color } = params;
 
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const width = font.widthOfTextAtSize(testLine, size);
-
-    if (width <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-
-  if (currentLine) lines.push(currentLine);
+  const lines = wrapTextLines({
+    text,
+    maxWidth,
+    font,
+    size,
+  });
 
   let currentY = y;
 
@@ -137,7 +203,10 @@ function drawWrappedText(params: {
     currentY -= lineHeight;
   }
 
-  return currentY;
+  return {
+    bottomY: currentY,
+    lineCount: lines.length,
+  };
 }
 
 export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Array> {
@@ -147,7 +216,7 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
   const width = page.getWidth();
   const height = page.getHeight();
 
-  const margin = 48;
+  const margin = 28;
   const contentWidth = width - margin * 2;
 
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -157,22 +226,22 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
   const muted = rgb(0.4, 0.44, 0.52);
   const border = rgb(0.86, 0.88, 0.91);
   const lightBg = rgb(0.97, 0.98, 0.99);
-  const accent = rgb(0.1, 0.12, 0.16);
+  const lighterRow = rgb(0.985, 0.987, 0.992);
+  const accent = rgb(0.35, 0.4, 0.5);
+  const headerText = rgb(0.98, 0.98, 0.98);
 
   const currencySymbol = data.currencySymbol || "$";
 
   let y = height - margin;
 
-  // Top accent bar
   page.drawRectangle({
     x: 0,
-    y: height - 16,
+    y: height - 14,
     width,
-    height: 16,
+    height: 14,
     color: accent,
   });
 
-  // Optional logo
   let logoDrawn = false;
   if (data.logoBytes && data.logoMimeType) {
     try {
@@ -181,8 +250,8 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
           ? await pdfDoc.embedPng(data.logoBytes)
           : await pdfDoc.embedJpg(data.logoBytes);
 
-      const maxLogoWidth = 90;
-      const maxLogoHeight = 50;
+      const maxLogoWidth = 82;
+      const maxLogoHeight = 46;
       const dims = image.scale(1);
 
       const widthRatio = maxLogoWidth / dims.width;
@@ -205,35 +274,41 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
     }
   }
 
-  const brandX = logoDrawn ? margin + 110 : margin;
+  const brandX = logoDrawn ? margin + 96 : margin;
   const companyName = (data.payToCompanyName || "").trim();
   const displayBrand = companyName || "Daniel Cruz";
 
-  drawText(page, displayBrand, brandX, y - 8, 18, fontBold, dark);
+  drawText(page, displayBrand, brandX, y - 6, 17, fontBold, dark);
   if (companyName) {
-    drawText(page, data.payToName || "Daniel Cruz", brandX, y - 28, 10, fontRegular, muted);
+    drawText(page, data.payToName || "Daniel Cruz", brandX, y - 24, 9, fontRegular, muted);
   }
 
-  // Invoice meta block
   const metaX = width - margin - 170;
-  drawText(page, "INVOICE", metaX, y - 8, 22, fontBold, dark);
+  drawText(page, "INVOICE", metaX, y - 6, 21, fontBold, dark);
 
-  drawText(page, "Invoice #", metaX, y - 34, 9, fontBold, muted);
-  drawText(page, data.invoiceNumber, metaX + 72, y - 34, 9, fontRegular, dark);
+  drawText(page, "Invoice #", metaX, y - 30, 9, fontBold, muted);
+  drawText(page, data.invoiceNumber, metaX + 72, y - 30, 9, fontRegular, dark);
 
-  drawText(page, "Invoice Date", metaX, y - 50, 9, fontBold, muted);
-  drawText(page, data.invoiceDate, metaX + 72, y - 50, 9, fontRegular, dark);
+  drawText(page, "Invoice Date", metaX, y - 46, 9, fontBold, muted);
+  drawText(page, data.invoiceDate, metaX + 72, y - 46, 9, fontRegular, dark);
 
-  drawText(page, "Due Date", metaX, y - 66, 9, fontBold, muted);
-  drawText(page, data.dueDate || "-", metaX + 72, y - 66, 9, fontRegular, dark);
+  drawText(page, "Due Date", metaX, y - 62, 9, fontBold, muted);
+  drawText(page, data.dueDate || "-", metaX + 72, y - 62, 9, fontRegular, dark);
 
-  y -= 100;
+  y -= 92;
 
-  // Bill To + Make Payment To cards
-  const cardY = y - 90;
-  const cardHeight = 90;
+  const customerAddressLines = buildCustomerAddress(data);
+  const payToLines = buildPayToAddress(data);
+
+  const maxCardLines = Math.max(customerAddressLines.length, payToLines.length, 3);
+  const cardPaddingTop = 34;
+  const cardPaddingBottom = 14;
+  const addressLineHeight = 13;
+  const cardHeight = cardPaddingTop + cardPaddingBottom + maxCardLines * addressLineHeight;
+
+  const cardY = y - cardHeight;
   const leftCardX = margin;
-  const cardGap = 16;
+  const cardGap = 12;
   const cardWidth = (contentWidth - cardGap) / 2;
   const rightCardX = leftCardX + cardWidth + cardGap;
 
@@ -257,44 +332,40 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
     borderWidth: 1,
   });
 
-  drawText(page, "Bill To", leftCardX + 12, cardY + cardHeight - 18, 10, fontBold, muted);
+  drawText(page, "Bill To", leftCardX + 10, cardY + cardHeight - 16, 10, fontBold, muted);
   drawText(
     page,
     "Make Payment To",
-    rightCardX + 12,
-    cardY + cardHeight - 18,
+    rightCardX + 10,
+    cardY + cardHeight - 16,
     10,
     fontBold,
     muted
   );
 
-  const customerAddressLines = buildCustomerAddress(data);
-  let billToY = cardY + cardHeight - 36;
+  let billToY = cardY + cardHeight - 34;
   for (const line of customerAddressLines) {
-    drawText(page, line, leftCardX + 12, billToY, 10, fontRegular, dark);
-    billToY -= 14;
+    drawText(page, line, leftCardX + 10, billToY, 9.5, fontRegular, dark);
+    billToY -= addressLineHeight;
   }
 
-  const payToLines = buildPayToAddress(data);
-  let payToY = cardY + cardHeight - 36;
+  let payToY = cardY + cardHeight - 34;
   for (const line of payToLines) {
-    drawText(page, line, rightCardX + 12, payToY, 10, fontRegular, dark);
-    payToY -= 14;
+    drawText(page, line, rightCardX + 10, payToY, 9.5, fontRegular, dark);
+    payToY -= addressLineHeight;
   }
 
-  y = cardY - 24;
+  y = cardY - 18;
 
-  // Table header
   const tableX = margin;
   const tableWidth = contentWidth;
-  const rowHeight = 22;
   const headerHeight = 24;
 
-  const colDate = 62;
-  const colTicket = 64;
-  const colHours = 52;
-  const colRate = 64;
-  const colAmount = 74;
+  const colDate = 58;
+  const colTicket = 82;
+  const colHours = 44;
+  const colRate = 58;
+  const colAmount = 68;
   const colDescription = tableWidth - (colDate + colTicket + colHours + colRate + colAmount);
 
   page.drawRectangle({
@@ -305,82 +376,142 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
     color: accent,
   });
 
-  let hx = tableX + 8;
-  drawText(page, "Date", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
-  hx += colDate;
-  drawText(page, "Ticket", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
-  hx += colTicket;
-  drawText(page, "Description", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
-  hx += colDescription;
-  drawText(page, "Hours", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
-  hx += colHours;
-  drawText(page, "Rate", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
-  hx += colRate;
-  drawText(page, "Amount", hx, y - 16, 9, fontBold, rgb(1, 1, 1));
+  const dateX = tableX + 8;
+  const ticketX = dateX + colDate;
+  const descX = ticketX + colTicket;
+  const hoursRightX = descX + colDescription + colHours - 8;
+  const rateRightX = descX + colDescription + colHours + colRate - 8;
+  const amountRightX = descX + colDescription + colHours + colRate + colAmount - 8;
 
-  y -= headerHeight + 6;
+  let hx = tableX + 8;
+  drawText(page, "Date", hx, y - 16, 9, fontBold, headerText);
+  hx += colDate;
+  drawText(page, "Ticket", hx, y - 16, 9, fontBold, headerText);
+  hx += colTicket;
+  drawText(page, "Description", hx, y - 16, 9, fontBold, headerText);
+  hx += colDescription;
+  drawText(page, "Hours", hx, y - 16, 9, fontBold, headerText);
+  hx += colHours;
+  drawText(page, "Rate", hx, y - 16, 9, fontBold, headerText);
+  hx += colRate;
+  drawText(page, "Amount", hx, y - 16, 9, fontBold, headerText);
+
+  y -= headerHeight + 12;
 
   let subtotal = 0;
   let totalHours = 0;
 
-  for (const item of data.lineItems) {
+  for (let i = 0; i < data.lineItems.length; i++) {
+    const item = data.lineItems[i];
+
     const amount =
       item.amount != null ? safeNumber(item.amount) : safeNumber(item.hours) * safeNumber(item.rate);
 
     subtotal += amount;
     totalHours += safeNumber(item.hours);
 
-    const descX = tableX + 8 + colDate + colTicket;
-    const descWidth = colDescription - 10;
+    const descLines = wrapTextLines({
+      text: item.description || "-",
+      maxWidth: colDescription - 10,
+      font: fontRegular,
+      size: 9,
+    });
 
-    const wrappedBottomY = drawWrappedText({
+    const lineCount = Math.max(descLines.length, 1);
+    const lineHeight = 11;
+    const topPadding = 8;
+    const bottomPadding = 6;
+    const usedHeight = Math.max(26, topPadding + bottomPadding + lineCount * lineHeight);
+
+    const rowTopY = y;
+    const rowBottomY = rowTopY - usedHeight + 4;
+    const textTopY = rowTopY - topPadding;
+
+    page.drawRectangle({
+      x: tableX,
+      y: rowBottomY,
+      width: tableWidth,
+      height: usedHeight,
+      color: i % 2 === 0 ? rgb(1, 1, 1) : lighterRow,
+      borderColor: border,
+      borderWidth: 0.6,
+    });
+
+    page.drawLine({
+      start: { x: ticketX - 6, y: rowBottomY },
+      end: { x: ticketX - 6, y: rowBottomY + usedHeight },
+      thickness: 0.5,
+      color: border,
+    });
+
+    page.drawLine({
+      start: { x: descX - 6, y: rowBottomY },
+      end: { x: descX - 6, y: rowBottomY + usedHeight },
+      thickness: 0.5,
+      color: border,
+    });
+
+    page.drawLine({
+      start: { x: descX + colDescription - 6, y: rowBottomY },
+      end: { x: descX + colDescription - 6, y: rowBottomY + usedHeight },
+      thickness: 0.5,
+      color: border,
+    });
+
+    page.drawLine({
+      start: { x: descX + colDescription + colHours - 6, y: rowBottomY },
+      end: { x: descX + colDescription + colHours - 6, y: rowBottomY + usedHeight },
+      thickness: 0.5,
+      color: border,
+    });
+
+    page.drawLine({
+      start: { x: descX + colDescription + colHours + colRate - 6, y: rowBottomY },
+      end: { x: descX + colDescription + colHours + colRate - 6, y: rowBottomY + usedHeight },
+      thickness: 0.5,
+      color: border,
+    });
+
+    drawText(page, item.date || "-", dateX, textTopY, 9, fontRegular, dark);
+    drawText(page, item.ticket_number || "-", ticketX, textTopY, 9, fontRegular, dark);
+
+    drawWrappedText({
       page,
       text: item.description || "-",
       x: descX,
-      y,
-      maxWidth: descWidth,
-      lineHeight: 11,
+      y: textTopY,
+      maxWidth: colDescription - 10,
+      lineHeight,
       font: fontRegular,
       size: 9,
       color: dark,
     });
 
-    const usedHeight = Math.max(rowHeight, y - wrappedBottomY + 8);
-
-    page.drawRectangle({
-      x: tableX,
-      y: y - usedHeight + 4,
-      width: tableWidth,
-      height: usedHeight,
-      borderColor: border,
-      borderWidth: 0.6,
-    });
-
-    drawText(page, item.date || "-", tableX + 8, y, 9, fontRegular, dark);
-    drawText(page, item.ticket_number || "-", tableX + 8 + colDate, y, 9, fontRegular, dark);
-    drawText(
+    drawRightAlignedText(
       page,
       safeNumber(item.hours) ? safeNumber(item.hours).toFixed(2) : "-",
-      tableX + 8 + colDate + colTicket + colDescription,
-      y,
+      hoursRightX,
+      textTopY,
       9,
       fontRegular,
       dark
     );
-    drawText(
+
+    drawRightAlignedText(
       page,
       safeNumber(item.rate) ? money(item.rate, currencySymbol) : "-",
-      tableX + 8 + colDate + colTicket + colDescription + colHours,
-      y,
+      rateRightX,
+      textTopY,
       9,
       fontRegular,
       dark
     );
-    drawText(
+
+    drawRightAlignedText(
       page,
       money(amount, currencySymbol),
-      tableX + 8 + colDate + colTicket + colDescription + colHours + colRate,
-      y,
+      amountRightX,
+      textTopY,
       9,
       fontRegular,
       dark
@@ -389,44 +520,50 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
     y -= usedHeight;
   }
 
-  y -= 16;
+  y -= 14;
 
-  // Summary box
-  const summaryWidth = 190;
+  const summaryWidth = 180;
   const summaryX = width - margin - summaryWidth;
 
   page.drawRectangle({
     x: summaryX,
-    y: y - 62,
+    y: y - 60,
     width: summaryWidth,
-    height: 62,
+    height: 60,
     color: lightBg,
     borderColor: border,
     borderWidth: 1,
   });
 
-  drawText(page, "Total Hours", summaryX + 12, y - 18, 10, fontBold, muted);
-  drawText(page, totalHours.toFixed(2), summaryX + 120, y - 18, 10, fontRegular, dark);
+  drawText(page, "Total Hours", summaryX + 10, y - 18, 10, fontBold, muted);
+  drawRightAlignedText(
+    page,
+    totalHours.toFixed(2),
+    summaryX + 170,
+    y - 18,
+    10,
+    fontRegular,
+    dark
+  );
 
-  drawText(page, "Total Due", summaryX + 12, y - 40, 11, fontBold, dark);
-  drawText(
+  drawText(page, "Total Due", summaryX + 10, y - 40, 11, fontBold, dark);
+  drawRightAlignedText(
     page,
     money(subtotal, currencySymbol),
-    summaryX + 120,
+    summaryX + 170,
     y - 40,
     11,
     fontBold,
     dark
   );
 
-  y -= 86;
+  y -= 82;
 
-  // Notes
   if (data.notes && data.notes.trim()) {
     drawText(page, "Notes", margin, y, 10, fontBold, muted);
-    y -= 16;
+    y -= 14;
 
-    y = drawWrappedText({
+    const notesWrap = drawWrappedText({
       page,
       text: data.notes.trim(),
       x: margin,
@@ -438,13 +575,12 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
       color: dark,
     });
 
-    y -= 8;
+    y = notesWrap.bottomY - 6;
   }
 
-  // Footer line
   page.drawLine({
-    start: { x: margin, y: 44 },
-    end: { x: width - margin, y: 44 },
+    start: { x: margin, y: 40 },
+    end: { x: width - margin, y: 40 },
     thickness: 1,
     color: border,
   });
@@ -453,7 +589,7 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
     page,
     "Thank you for your business.",
     margin,
-    30,
+    27,
     9,
     fontRegular,
     muted
