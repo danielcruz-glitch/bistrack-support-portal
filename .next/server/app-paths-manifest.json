@@ -1,5 +1,0 @@
-{
-  "/api/invoices/generate/route": "app/api/invoices/generate/route.js",
-  "/api/invoices/[id]/pdf/route": "app/api/invoices/[id]/pdf/route.js",
-  "/admin/invoices/page": "app/admin/invoices/page.js"
-}
